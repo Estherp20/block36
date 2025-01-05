@@ -11,6 +11,16 @@ const {
   authenticate,
   findUserWithToken
 } = require('./db');
+
+const isLoggedIn = async(req, res, next) => {
+  try{
+    req.user = await findUserWithToken(req.headers.authorization);
+    next();
+  } catch(ex){
+    next(ex);
+  }
+}
+
 const express = require('express');
 const app = express();
 app.use(express.json());
@@ -48,8 +58,14 @@ app.get('/api/users', async(req, res, next)=> {
   }
 });
 
-app.get('/api/users/:id/favorites', async(req, res, next)=> {
+app.get('/api/users/:id/favorites', isLoggedIn, async(req, res, next)=> {
   try {
+    if(
+      req.params.id !== req.user.id){
+        const error = Error('not authorized');
+        error.status = 401
+        throw error;
+      }
     res.send(await fetchFavorites(req.params.id));
   }
   catch(ex){
@@ -57,8 +73,13 @@ app.get('/api/users/:id/favorites', async(req, res, next)=> {
   }
 });
 
-app.post('/api/users/:id/favorites', async(req, res, next)=> {
+app.post('/api/users/:id/favorites', isLoggedIn, async(req, res, next)=> {
   try {
+    if(req.params.id !== req.user.id){
+      const error = Error('not authorized');
+      error.status = 401;
+      throw error;
+    }
     res.status(201).send(await createFavorite({ user_id: req.params.id, product_id: req.body.product_id}));
   }
   catch(ex){
@@ -66,8 +87,13 @@ app.post('/api/users/:id/favorites', async(req, res, next)=> {
   }
 });
 
-app.delete('/api/users/:user_id/favorites/:id', async(req, res, next)=> {
+app.delete('/api/users/:user_id/favorites/:id', isLoggedIn, async(req, res, next)=> {
   try {
+    if(req.params.userId !== req.user.id){
+      const error = Error('not authorized');
+      error.status = 401;
+      throw error;
+    }
     await destroyFavorite({user_id: req.params.user_id, id: req.params.id });
     res.sendStatus(204);
   }
@@ -97,6 +123,8 @@ const init = async()=> {
 
   await createTables();
   console.log('tables created');
+
+
 
   const [moe, lucy, ethyl, curly, foo, bar, bazz, quq, fip] = await Promise.all([
     createUser({ username: 'moe', password: 'm_pw'}),
